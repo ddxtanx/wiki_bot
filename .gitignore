@@ -1,0 +1,4 @@
+.pylintrc
+*.txt
+__pycache__
+*.pyc

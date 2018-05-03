@@ -76,7 +76,7 @@ def getSubcategories(category):
     singleStepSubcategories = [category]
     allSubcategories = []
     while(current_depth <= max_depth):
-        print_debug("Current tree depth " + str(current_depth))
+        print_debug("Current tree depth {d}".format(d=current_depth))
         subcategoryTemp = []
         if(len(singleStepSubcategories) == 0):
             break
@@ -94,7 +94,10 @@ def getSubcategories(category):
                     allSubcategories.append(title)
                     subcategoryTemp.append(title)
                 else:
-                    print_debug(title + " already checked. Moving on")
+                    print_debug("{t} already checked. Moving on".format(
+                                                                    t=title
+                                                                    )
+                                )
         singleStepSubcategories = subcategoryTemp
         current_depth += 1
     return allSubcategories
@@ -102,8 +105,8 @@ def getSubcategories(category):
 
 def saveArray(category, subcats):
     """Save array to file."""
-    filename = category+"_subcats.txt"
-    print_debug("Saving to " + filename)
+    filename = "{category}_subcats.txt".format(category)
+    print_debug("Saving to {f}".format(f=filename))
     with open(filename, 'w') as f:
         for cat in subcats:
             f.write(cat+"\n")
@@ -136,7 +139,7 @@ def randomPage(category, save=False, regen=False):
     if(not regen):
         subCats = retreiveSubcategoriesFromLocation(category)
     if(regen or (not read)):
-        print_debug("Rebuilding " + category)
+        print_debug("Rebuilding {category}".format(category=category))
         subCatsMaybeDup = getSubcategories(category)
         subCats = list(set(subCatsMaybeDup))
     if(save or regen):
@@ -145,11 +148,11 @@ def randomPage(category, save=False, regen=False):
     while(not randomPage):
         try:
             cat = random.choice(subCats)
-            print_debug("Chose category " + cat)
+            print_debug("Chose category {cat}".format(cat=cat))
             pages = wrappedRequest(cat, mode="Subpage")
             randomPage = random.choice(pages)['title']
         except IndexError as a:
-            print_debug(cat + " has no pages. Retrying")
+            print_debug("{cat} has no pages. Retrying".format(cat=cat))
         except AttributeError as b:
             pass
     return randomPage

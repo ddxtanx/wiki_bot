@@ -105,11 +105,16 @@ def getSubcategories(category):
 
 def saveArray(category, subcats):
     """Save array to file."""
-    filename = "{category}_subcats.txt".format(category)
+    filename = "{category}_subcats.txt".format(category=category)
     print_debug("Saving to {f}".format(f=filename))
     with open(filename, 'w') as f:
         for cat in subcats:
             f.write(cat+"\n")
+
+
+def subcategoriesWithoutDuplicates(category):
+    """Generate a list of subcategories without duplicates."""
+    return set(getSubcategories(category))
 
 
 def retreiveSubcategoriesFromLocation(category):
@@ -126,8 +131,7 @@ def retreiveSubcategoriesFromLocation(category):
         print_debug("{fileName} does not exist. Building from " +
                     " network".format(fileName=fileName)
                     )
-        subCatsMaybeDup = getSubcategories(category)
-        subCats = list(set(subCatsMaybeDup))
+        subCats = subcategoriesWithoutDuplicates(category)
     return subCats
 
 
@@ -140,14 +144,13 @@ def randomPage(category, save=False, regen=False):
         subCats = retreiveSubcategoriesFromLocation(category)
     if(regen or (not read)):
         print_debug("Rebuilding {category}".format(category=category))
-        subCatsMaybeDup = getSubcategories(category)
-        subCats = list(set(subCatsMaybeDup))
+        subCats = subcategoriesWithoutDuplicates(category)
     if(save or regen):
         saveArray(category, subCats)
     randomPage = None
     while(not randomPage):
         try:
-            cat = random.choice(subCats)
+            cat = random.sample(subCats, 1)[0]
             print_debug("Chose category {cat}".format(cat=cat))
             pages = wrappedRequest(cat, mode="Subpage")
             randomPage = random.choice(pages)['title']

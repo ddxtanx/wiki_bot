@@ -24,11 +24,9 @@ def generateRequestsParams(category, mode):
     cmtype = ""
     if(mode == "Subcat"):
         cmtype = 'subcat'
-    else:
+    elif(mode == "Subpage"):
         cmtype = 'page'
-
     params = {
-        'format': 'json',
         'format': 'json',
         'action': 'query',
         'list': 'categorymembers',
@@ -36,6 +34,13 @@ def generateRequestsParams(category, mode):
         'cmlimit': 500,
         'cmtype': cmtype
     }
+    if(mode == "Pagecats"):
+        params = {
+            'format': 'json',
+            'action': 'query',
+            'titles': category,
+            'prop': 'categories'
+        }
     return params
 
 
@@ -46,10 +51,16 @@ def wrappedRequest(category, mode):
     global headerVal
     max_times = 5
     times = 0
+    propertyString = 'categorymembers'
     while(times < max_times):
         try:
             r = requests.get(base_url, headers=headerVal, params=params)
-            return r.json()['query']['categorymembers']
+            print_debug(str(r.json()))
+            if(mode != "Pagecats"):
+                return r.json()['query'][propertyString]
+            else:
+                for key in r.json()['query']['pages']:
+                    return r.json()['query']['pages'][key]['categories']
         except requests.exceptions.ConnectionError as e:
             if(times > max_times):
                 print_debug("{category} failed too many times ({times}) " +
@@ -125,7 +136,7 @@ def retreiveSubcategoriesFromLocation(category):
         subCatFile = open(fileName, 'r')
         print_debug("Reading from {filename}".format(filename=fileName))
         for count, line in enumerate(subCatFile):
-            subCats.append(line)
+            subCats.append(line.replace("\n", ""))
         subCatFile.close()
     except IOError as ioError:
         print_debug("{fileName} does not exist. Building from " +
@@ -135,7 +146,27 @@ def retreiveSubcategoriesFromLocation(category):
     return subCats
 
 
-def randomPage(category, save=False, regen=False):
+def checkPageSimilarity(page, subcategories):
+    """Check the similarity of page to a list of subcategories.
+
+    Verify if page truly is a subpage of a category.
+    """
+    global similarityVal
+    pageCats = wrappedRequest(page, mode="Pagecats")
+    points = 0.0
+    # For every supercategory of page, if it is also in subcategories
+    # the page is more likely to be a true subpage.
+    for cat in pageCats:
+        title = cat['title']
+        if(title in subcategories):
+            points += 1.0
+    score = points/len(pageCats)
+    if(score >= similarityVal):
+        return True
+    return False
+
+
+def randomPage(category, save, regen, check):
     """Generate a random page from a category."""
     global DEBUGGING
     subCats = []
@@ -148,16 +179,18 @@ def randomPage(category, save=False, regen=False):
     if(save or regen):
         saveArray(category, subCats)
     randomPage = None
-    while(not randomPage):
+    validRandomPage = True
+    while(not randomPage or not validRandomPage):
         try:
             cat = random.sample(subCats, 1)[0]
             print_debug("Chose category {cat}".format(cat=cat))
             pages = wrappedRequest(cat, mode="Subpage")
             randomPage = random.choice(pages)['title']
+            if(check):
+                print_debug("Checking " + randomPage)
+                validRandomPage = checkPageSimilarity(randomPage, subCats)
         except IndexError as a:
             print_debug("{cat} has no pages. Retrying".format(cat=cat))
-        except AttributeError as b:
-            pass
     return randomPage
 
 
@@ -173,6 +206,12 @@ if(__name__ == "__main__"):
                         default=4,
                         help="How far down to traverse the subcategory tree"
                         )
+    parser.add_argument('--similarity',
+                        nargs='?',
+                        type=float,
+                        default=.5,
+                        help="What percent of page categories need to be " +
+                        "in subcategory array. Must be used with -c/--check")
     parser.add_argument("-s",
                         "--save",
                         action="store_true",
@@ -188,9 +227,16 @@ if(__name__ == "__main__"):
                         action="store_true",
                         help="Print debug lines"
                         )
+    parser.add_argument("-c",
+                        "--check",
+                        action="store_true",
+                        help="After finding page check to see that it truly " +
+                        "fits in category"
+                        )
     args = parser.parse_args()
     DEBUGGING = args.verbose
     max_depth = args.tree_depth
+    similarityVal = args.similarity
     if(args.save and DEBUGGING):
         print("Saving!")
     if(args.regen and DEBUGGING):
@@ -198,6 +244,7 @@ if(__name__ == "__main__"):
     print("https://en.wikipedia.org/wiki/" + randomPage("Category:" +
                                                         args.category,
                                                         save=args.save,
-                                                        regen=args.regen
+                                                        regen=args.regen,
+                                                        check=args.check
                                                         )
           )

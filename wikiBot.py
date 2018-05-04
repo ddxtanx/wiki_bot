@@ -5,22 +5,28 @@ import random
 import requests
 
 DEBUGGING = False
-max_depth = 4
-current_depth = 0
-header = "Garrett Credi's Random Page Bot(Contact @ gcc@ameritech.net)"
-headerVal = {'Api-User-Agent': header}
-base_url = 'https://en.wikipedia.org/w/api.php'
 
 
-def print_debug(str):
-    """Print strings if in debug/verbose mode mode."""
+def print_debug(debug_str):
+    """Print strings if in debug/verbose mode mode.
+
+    Input:
+        Debug_Str (String): string to be printed
+    Output:
+        None
+    Affect:
+        If in debug mode, print Debug_Str
+    """
     global DEBUGGING
     if(DEBUGGING):
-        print("DEBUG: " + str)
+        print("DEBUG: " + debug_str)
 
 
-def generateRequestsParams(category, mode):
-    """Generate the params for requests given a category and a mode."""
+def generateRequestsParams(wiki_obj, mode):
+    """Generate the params for requests given a category and a mode.
+
+    See wrappedRequest for variable descriptions
+    """
     cmtype = ""
     if(mode == "Subcat"):
         cmtype = 'subcat'
@@ -30,7 +36,7 @@ def generateRequestsParams(category, mode):
         'format': 'json',
         'action': 'query',
         'list': 'categorymembers',
-        'cmtitle': category,
+        'cmtitle': wiki_obj,
         'cmlimit': 500,
         'cmtype': cmtype
     }
@@ -38,17 +44,29 @@ def generateRequestsParams(category, mode):
         params = {
             'format': 'json',
             'action': 'query',
-            'titles': category,
+            'titles': wiki_obj,
             'prop': 'categories'
         }
     return params
 
 
-def wrappedRequest(category, mode):
-    """Wrap a request to deal with connection errors."""
-    global base_url
-    params = generateRequestsParams(category, mode)
-    global headerVal
+def wrappedRequest(wiki_obj, mode):
+    """Wrap a request to deal with connection errors.
+
+    Input:
+        wiki_obj (String):
+            Page or category to process
+        mode (String):
+            Subcat: generate subcategories of a given category
+            Subpage: generate subpages of a given category
+            Pagecats: generate categories that page belongs to
+    Output:
+        List<String>: wikipedia API data for given request
+    """
+    header = "Garrett Credi's Random Page Bot(Contact @ gcc@ameritech.net)"
+    headerVal = {'Api-User-Agent': header}
+    base_url = 'https://en.wikipedia.org/w/api.php'
+    params = generateRequestsParams(wiki_obj, mode)
     max_times = 5
     times = 0
     propertyString = 'categorymembers'
@@ -62,25 +80,29 @@ def wrappedRequest(category, mode):
                     return r.json()['query']['pages'][key]['categories']
         except requests.exceptions.ConnectionError as e:
             if(times > max_times):
-                print_debug("{category} failed too many times ({times}) " +
-                            " times. Moving on".format(
-                                category=category,
-                                times=times
-                                )
-                            )
+                print_debug(
+                    "{w} failed too many times ({t}) times. Moving on".format(
+                                w=wiki_obj,
+                                t=times
+                    )
+                )
                 times = 0
-                return [category]
+                return [wiki_obj]
             else:
-                print_debug("Retrying {category} due to connection " +
-                            " error".format(
-                                cateogry=category
-                                )
-                            )
+                print_debug(
+                    "Retrying {w} due to connection error".format(w=wiki_obj)
+                )
                 times += 1
 
 
 def getSubcategories(category):
-    """Get subcategories of a given subcategory."""
+    """Get subcategories of a given subcategory.
+
+    Input:
+        Category (String): category to generate subcats of
+    Output:
+        List<Strings>: list of subcategories
+    """
     global max_depth, DEBUGGING
     current_depth = 1
     singleStepSubcategories = [category]
@@ -104,17 +126,26 @@ def getSubcategories(category):
                     allSubcategories.append(title)
                     subcategoryTemp.append(title)
                 else:
-                    print_debug("{t} already checked. Moving on".format(
-                                                                    t=title
-                                                                    )
-                                )
+                    print_debug(
+                        "{t} already checked. Moving on".format(t=title)
+                    )
         singleStepSubcategories = subcategoryTemp
         current_depth += 1
     return allSubcategories
 
 
 def saveArray(category, subcats):
-    """Save array to file."""
+    """Save array to file.
+
+    Input:
+        Category: category that subcats belong to
+        Subcats List<String>: subcats of category
+    Output:
+        None
+    Affect:
+        If user has requesite permissions, subcategory list is saved
+        to {category}_subcats.txt
+    """
     filename = "{category}_subcats.txt".format(category=category)
     print_debug("Saving to {f}".format(f=filename))
     with open(filename, 'w') as f:
@@ -122,13 +153,25 @@ def saveArray(category, subcats):
             f.write(cat+"\n")
 
 
-def subcategoriesWithoutDuplicates(category):
-    """Generate a list of subcategories without duplicates."""
-    return set(getSubcategories(category))
+def subcategoriesWithoutDuplicates(subcats):
+    """Generate a list of subcategories without duplicates.
+
+    Input:
+        Subcats List<String>: list of subcategories
+    Output:
+        Set<String>: set of subcategories without any duplicates
+    """
+    return set(getSubcategories(subcats))
 
 
 def retreiveSubcategoriesFromLocation(category):
-    """Get subcategories from file, or generate them from scratch."""
+    """Get subcategories from file, or generate them from scratch.
+
+    Input:
+        Category (String): category to retreive subcats from.
+    Output:
+        Set<String>: set of subcategories
+    """
     subCats = []
     fileName = "{category}_subcats.txt".format(category=category)
     try:
@@ -138,42 +181,55 @@ def retreiveSubcategoriesFromLocation(category):
             subCats.append(line.replace("\n", ""))
         subCatFile.close()
     except IOError as ioError:
-        print_debug("{fileName} does not exist. Building from " +
-                    " network".format(fileName=fileName)
-                    )
+        print_debug(
+            "{f} does not exist. Building from network".format(f=fileName)
+        )
         subCats = subcategoriesWithoutDuplicates(category)
     return subCats
 
 
-def checkPageSimilarity(page, subcategories):
-    """Check the similarity of page to a list of subcategories.
+def checkSimilarity(wiki_obj, subcategories):
+    """Check the similarity of page/category to a list of subcategories.
 
-    Verify if page truly is a subpage of a category.
+    Input:
+        Wiki_Obj (String): page or category to check similarity of
+        Subcategories (Set<String>): set of subcategories that wiki_obj belongs
+    Output:
+        Boolean: whether or not wiki_obj is similar enough to subcategories
     """
     global similarityVal
-    pageCats = wrappedRequest(page, mode="Pagecats")
+    pageCats = wrappedRequest(wiki_obj, mode="Pagecats")
     points = 0.0
     # For every supercategory of page, if it is also in subcategories
     # the page is more likely to be a true subpage.
+    if(len(pageCats) == 1):
+        return checkSimilarity(pageCats[0]['title'], subcategories)
     for cat in pageCats:
         title = cat['title']
         if(title in subcategories):
             points += 1.0
     score = points/len(pageCats)
-    print_debug("Score of {p} is {s}".format(p=page, s=str(score)))
+    print_debug("Score of {w} is {s}".format(w=wiki_obj, s=str(score)))
     if(score >= similarityVal):
         return True
     return False
 
 
 def randomPage(category, save, regen, check):
-    """Generate a random page from a category."""
-    global DEBUGGING
+    """Generate a random page from a category.
+
+    Input:
+        Category (String): category to get page from
+        Save (Boolean): whether or not to save subcategories to a file
+        Regen (Boolean): whether or not to regenerate subcategory set
+        Check (Boolean): whether or not to check page similarity
+    Output:
+        String: A random page belonging to category, or one of its subcats
+    """
     subCats = []
-    read = True
     if(not regen):
         subCats = retreiveSubcategoriesFromLocation(category)
-    if(regen or (not read)):
+    if(regen or (not subCats)):
         print_debug("Rebuilding {category}".format(category=category))
         subCats = subcategoriesWithoutDuplicates(category)
     if(save or regen):
@@ -189,7 +245,7 @@ def randomPage(category, save, regen, check):
             title = randomPage['title']
             if(check):
                 print_debug("Checking " + title)
-                validRandomPage = checkPageSimilarity(title, subCats)
+                validRandomPage = checkSimilarity(title, subCats)
                 if(not validRandomPage):
                     pages.remove(randomPage)
         except IndexError as a:
@@ -201,10 +257,11 @@ def randomPage(category, save, regen, check):
 
 
 if(__name__ == "__main__"):
-    parser = argparse.ArgumentParser(description='Get a random page from a ' +
-                                     'wikipedia category')
-    parser.add_argument('category', help="The category you wish to get a " +
-                        "page from."
+    parser = argparse.ArgumentParser(
+        description="Get a random page from a wikipedia category"
+    )
+    parser.add_argument('category',
+                        help="The category you wish to get a page from."
                         )
     parser.add_argument('--tree_depth',
                         nargs='?',

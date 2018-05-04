@@ -55,7 +55,6 @@ def wrappedRequest(category, mode):
     while(times < max_times):
         try:
             r = requests.get(base_url, headers=headerVal, params=params)
-            print_debug(str(r.json()))
             if(mode != "Pagecats"):
                 return r.json()['query'][propertyString]
             else:
@@ -161,6 +160,7 @@ def checkPageSimilarity(page, subcategories):
         if(title in subcategories):
             points += 1.0
     score = points/len(pageCats)
+    print_debug("Score of {p} is {s}".format(p=page, s=str(score)))
     if(score >= similarityVal):
         return True
     return False
@@ -180,18 +180,24 @@ def randomPage(category, save, regen, check):
         saveArray(category, subCats)
     randomPage = None
     validRandomPage = True
+    cat = random.sample(subCats, 1)[0]
+    print_debug("Chose category {cat}".format(cat=cat))
+    pages = wrappedRequest(cat, mode="Subpage")
     while(not randomPage or not validRandomPage):
         try:
+            randomPage = random.choice(pages)
+            title = randomPage['title']
+            if(check):
+                print_debug("Checking " + title)
+                validRandomPage = checkPageSimilarity(title, subCats)
+                if(not validRandomPage):
+                    pages.remove(randomPage)
+        except IndexError as a:
+            print_debug("{cat} has no pages. Retrying".format(cat=cat))
             cat = random.sample(subCats, 1)[0]
             print_debug("Chose category {cat}".format(cat=cat))
             pages = wrappedRequest(cat, mode="Subpage")
-            randomPage = random.choice(pages)['title']
-            if(check):
-                print_debug("Checking " + randomPage)
-                validRandomPage = checkPageSimilarity(randomPage, subCats)
-        except IndexError as a:
-            print_debug("{cat} has no pages. Retrying".format(cat=cat))
-    return randomPage
+    return randomPage['title']
 
 
 if(__name__ == "__main__"):
@@ -234,13 +240,15 @@ if(__name__ == "__main__"):
                         "fits in category"
                         )
     args = parser.parse_args()
+    print_debug(str(args.check))
     DEBUGGING = args.verbose
     max_depth = args.tree_depth
     similarityVal = args.similarity
-    if(args.save and DEBUGGING):
-        print("Saving!")
-    if(args.regen and DEBUGGING):
-        print("Regenerating!")
+    if(args.save):
+        print_debug("Saving!")
+    if(args.regen):
+        print_debug("Regenerating!")
+
     print("https://en.wikipedia.org/wiki/" + randomPage("Category:" +
                                                         args.category,
                                                         save=args.save,

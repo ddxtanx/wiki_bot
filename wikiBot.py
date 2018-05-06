@@ -37,6 +37,22 @@ class WikiBot():
         self.td = tree_depth
         self.sv = similarity_val
 
+    def setTreeDepth(self, tree_depth):
+        """Setter for treeDepth.
+
+        Input:
+            Tree_Depth <Natural Number>
+        """
+        self.tf = tree_depth
+
+    def setSimilarityVal(self, similarity_val):
+        """Setter for SimilarityVal.
+
+        Input:
+            SimilarityVal <Float>
+        """
+        self.sv = similarity_val
+
     def generateRequestsParams(self, wiki_obj, mode):
         """Generate the params for requests given a category and a mode.
 

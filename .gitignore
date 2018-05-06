@@ -1,4 +1,7 @@
 dist
+build
+wikiBot.egg-info
+.DS_Store
 .pylintrc
 *.txt
 __pycache__

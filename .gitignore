@@ -1,6 +1,6 @@
+dist
 .pylintrc
 *.txt
 __pycache__
 *.pyc
-
 !LICENSE.txt

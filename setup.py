@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
   name='wikiBot',
-  version='0.4',
+  version='0.5',
   description='A random wikipedia page generator.',
   long_description='A bot that uses the Wikipedia API to enumerate ' +
   'subcategories and subpages to generate a random page that is a member of ' +

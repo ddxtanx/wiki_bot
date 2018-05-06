@@ -252,6 +252,10 @@ def randomPage(category, save, regen, check):
                     pages.remove(randomPage)
         except IndexError as a:
             print_debug("{cat} has no pages. Retrying".format(cat=cat))
+            subCats.remove(cat)
+            if(len(subCats) == 0):
+                print_debug("No categories left. Sorry!")
+                raise ValueError("Category inputted is invalid.")
             cat = random.sample(subCats, 1)[0]
             print_debug("Chose category {cat}".format(cat=cat))
             pages = wrappedRequest(cat, mode="Subpage")

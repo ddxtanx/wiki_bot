@@ -5,6 +5,8 @@ import random
 import requests
 
 DEBUGGING = False
+max_depth = 4
+similarityVal = .5
 
 
 def print_debug(debug_str):

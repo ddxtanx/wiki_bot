@@ -172,12 +172,13 @@ class WikiBot():
         Output:
             None
         Affect:
-            If user has requesite permissions, subcategory list is saved
+            If user has requisite permissions, subcategory list is saved
             to {category}_subcats.txt
         """
         filename = "{category}_subcats.txt".format(category=category)
         print_debug("Saving to {f}".format(f=filename))
         with open(filename, 'w') as f:
+            f.write("td:"+str(self.td)+"\n")
             for cat in subcats:
                 f.write(cat+"\n")
 
@@ -202,11 +203,18 @@ class WikiBot():
         subCats = []
         fileName = "{category}_subcats.txt".format(category=category)
         try:
-            subCatFile = open(fileName, 'r')
-            print_debug("Reading from {filename}".format(filename=fileName))
-            for count, line in enumerate(subCatFile):
-                subCats.append(line.replace("\n", ""))
-            subCatFile.close()
+            with open(fileName, 'r') as subCatFile:
+                print_debug("Reading from {f}".format(f=fileName))
+                fileLines = subCatFile.readlines()
+                fileD = int(fileLines[0].split(":")[1].replace("\n", ""))
+                if(fileD < self.td):
+                    subcats = self.getSubcategories(category)
+                    self.saveArray(category, subcats)
+                    return subCats
+                for i in range(1, len(fileLines)):
+                    line = fileLines[i]
+                    subCats.append(line.replace("\n", ""))
+                subCatFile.close()
         except IOError as ioError:
             print_debug(
                 "{f} does not exist. Building from network".format(f=fileName)
@@ -219,7 +227,7 @@ class WikiBot():
 
         Input:
             Wiki_Obj (String): page or category to check similarity of
-            Subcategories (Set<String>): set of subcategories that wiki_obj belongs
+            Subcategories (Set<String>): set of subcategories
         Output:
             Boolean: whether or not wiki_obj is similar enough to subcategories
         """

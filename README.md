@@ -10,6 +10,13 @@ cd wikiBot
 pip install -r
 ```
 
+OR
+
+```bash
+pip install wikiBot
+```
+To use as an API
+
 # Usage
 `python wikiBot.py -h` shows the usage of the program.
 ```
@@ -41,6 +48,24 @@ Pro Tips:
 * Use a tree_depth of 3 or 4, more than 4 will bring loosely relates categories into subcategories.
 * Use a similarity of .25 or .33. If you want a higher similarity value then you might sacrifice other valid pages in
 search for the PERFECT page.
+
+If you're using it in your own Python code the best way to set it up is
+```python
+from wikiBot import WikiBot
+wb = WikiBot({{Your preferred tree_depth}}, {{Your preferred similarity_val}})
+
+"""
+...
+Your Awesome Code
+...
+"""
+
+randomPage = wb.randomPage(category,...)
+```
+
+You can also change the tree depth and similarity_val by using `wb.td = {{ New Tree Depth}}` and `wb.sv = {{ New Similarity Val}}`
+
+More info available by using `help(wikiBot)`
 # How It Works
 The most important part of this program is the Wikipedia API; it allows the program to gather all of the subcategories of a given category in a fast(ish) and usable manner, and to get the pages belonging to a given category. The bulk of my code focuses on iteratively getting the subcategories at a given depth in a tree, adding them to an array with all subcategories of a given 'parent' category, and continuing on in that fashion until there are no more subcategories or the program has fetched to the maximum tree depth allowed. i.e. if a subcategory chain went
 

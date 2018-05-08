@@ -15,5 +15,5 @@ setup(
   py_modules=["wiki_bot"],
   keywords=['wikipedia', 'random', 'generator', 'command_line', 'api'],
   classifiers=[],
-  install_requires=['requests']
+  install_requires=['requests', 'mypy']
 )

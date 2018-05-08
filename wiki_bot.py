@@ -1,6 +1,7 @@
 """Generate a random page from a wikipedia category."""
 import argparse
 import random
+from typing import Dict, List, Set
 
 import requests
 
@@ -9,7 +10,7 @@ max_depth = 4
 similarity_val = .5
 
 
-def print_debug(debug_str: str):
+def print_debug(debug_str: str) -> None:
     """Print strings if in debug/verbose mode mode.
 
     Input:
@@ -23,7 +24,7 @@ def print_debug(debug_str: str):
         print("DEBUG: " + debug_str)
 
 
-def generate_requests_params(wiki_obj: str, mode: str) -> dict:
+def generate_requests_params(wiki_obj: str, mode: str) -> Dict[str, str]:
     """Generate the params for requests given a category and a mode.
 
     See wrapped_request for variable descriptions
@@ -38,7 +39,6 @@ def generate_requests_params(wiki_obj: str, mode: str) -> dict:
         'action': 'query',
         'list': 'categorymembers',
         'cmtitle': wiki_obj,
-        'cmlimit': 500,
         'cmtype': cmtype
     }
     if mode == "Pagecats":
@@ -50,8 +50,7 @@ def generate_requests_params(wiki_obj: str, mode: str) -> dict:
         }
     return params
 
-
-def wrapped_request(wiki_obj: str, mode: str) -> requests.Response:
+def wrapped_request(wiki_obj: str, mode: str) -> List[Dict[str,str]]:
     """Wrap a request to deal with connection errors.
 
     Input:
@@ -80,27 +79,27 @@ def wrapped_request(wiki_obj: str, mode: str) -> requests.Response:
                 for key in req.json()['query']['pages']:
                     return req.json()['query']['pages'][key]['categories']
         except requests.exceptions.ConnectionError:
-            if times > max_times:
-                print_debug(
-                    "{w} failed too many times ({t}) times. " +
-                    "Moving on".format(
-                        w=wiki_obj,
-                        t=times
-                    )
-                )
-                times = 0
-                return [wiki_obj]
-            else:
-                print_debug(
-                    "Retrying {w} due to connection error".format(w=wiki_obj)
-                )
-                times += 1
+            print_debug(
+                "Retrying {w} due to connection error".format(w=wiki_obj)
+            )
+            times += 1
+    print_debug(
+        "{w} failed too many times ({t}) times. " +
+        "Moving on".format(
+            w=wiki_obj,
+            t=times
+        )
+    )
+    times = 0
+    return [{
+        'title': wiki_obj
+    }]
 
 
 class WikiBot():
     """WikiBot Class."""
 
-    def __init__(self, tree_depth: int, similarity_val: float):
+    def __init__(self, tree_depth: int, similarity_val: float) -> None:
         """Init Method for WikiBot.
 
         Input:
@@ -110,7 +109,7 @@ class WikiBot():
         self.td = tree_depth
         self.sv = similarity_val
 
-    def get_subcategories(self, category: str) -> list:
+    def get_subcategories(self, category: str) -> List[str]:
         """Get subcategories of a given subcategory.
 
         Input:
@@ -147,7 +146,7 @@ class WikiBot():
             current_depth += 1
         return all_subcategories
 
-    def save_array(self, category: str, subcats: list):
+    def save_array(self, category: str, subcats: Set[str]) -> None:
         """Save array to file.
 
         Input:
@@ -166,7 +165,7 @@ class WikiBot():
             for cat in subcats:
                 f.write(cat + "\n")
 
-    def subcategories_without_duplicates(self, subcats: list) -> set:
+    def subcategories_without_duplicates(self, category: str) -> Set[str]:
         """Generate a list of subcategories without duplicates.
 
         Input:
@@ -174,9 +173,9 @@ class WikiBot():
         Output:
             Set<String>: set of subcategories without any duplicates
         """
-        return set(self.get_subcategories(subcats))
+        return set(self.get_subcategories(category))
 
-    def retreive_subcategories_from_location(self, category: str) -> set:
+    def retreive_subcategories_from_location(self, category: str) -> Set[str]:
         """Get subcategories from file, or generate them from scratch.
 
         Input:
@@ -184,7 +183,7 @@ class WikiBot():
         Output:
             Set<String>: set of subcategories
         """
-        sub_cats = set()
+        sub_cats = set() # type: Set[str]
         file_name = "{category}_subcats.txt".format(category=category)
         try:
             with open(file_name, 'r') as sub_cat_file:
@@ -192,7 +191,7 @@ class WikiBot():
                 file_lines = sub_cat_file.readlines()
                 file_d = int(file_lines[0].split(":")[1].replace("\n", ""))
                 if(file_d < self.td):
-                    subcats = self.get_subcategories(category)
+                    subcats = self.subcategories_without_duplicates(category)
                     self.save_array(category, subcats)
                     return sub_cats
                 for i in range(1, len(file_lines)):
@@ -206,7 +205,7 @@ class WikiBot():
             sub_cats = self.subcategories_without_duplicates(category)
         return sub_cats
 
-    def check_similarity(self, wiki_obj: str, subcategories: set) -> bool:
+    def check_similarity(self, wiki_obj: str, subcategories: Set[str]) -> bool:
         """Check the similarity of page/category to a list of subcategories.
 
         Input:
@@ -242,7 +241,7 @@ class WikiBot():
         Output:
             String: A random page belonging to category, or one of its subcats
         """
-        sub_cats = []
+        sub_cats = set() # type: Set[str]
         if(not regen):
             sub_cats = self.retreive_subcategories_from_location(category)
         if(regen or (not sub_cats)):

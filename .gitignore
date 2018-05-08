@@ -9,3 +9,5 @@ __pycache__
 !LICENSE.txt
 pylama.ini
 setup.cfg
+mypy.ini
+.mypy_cache

@@ -1,9 +1,11 @@
 dist
 build
-wikiBot.egg-info
+wiki_bot.egg-info
 .DS_Store
 .pylintrc
 *.txt
 __pycache__
 *.pyc
 !LICENSE.txt
+pylama.ini
+setup.cfg

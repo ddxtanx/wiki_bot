@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-  name='wikiBot',
+  name='wiki_bot',
   version='1.0',
   description='A random wikipedia page generator.',
   long_description='A bot that uses the Wikipedia API to enumerate ' +
@@ -12,7 +12,7 @@ setup(
   url='https://github.com/ddxtanx/wikiBot',
   license='MIT',
   download_url='https://github.com/ddxtanx/wikiBot/archive/0.2.tar.gz',
-  py_modules=["wikiBot"],
+  py_modules=["wiki_bot"],
   keywords=['wikipedia', 'random', 'generator', 'command_line', 'api'],
   classifiers=[],
   install_requires=['requests']

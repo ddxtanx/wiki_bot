@@ -1,12 +1,13 @@
 from setuptools import setup
 
+with open('README.md') as f:
+    long_description = f.read()
 setup(
   name='wiki_bot',
-  version='1.2',
+  version='1.3.1',
   description='A random wikipedia page generator.',
-  long_description='A bot that uses the Wikipedia API to enumerate ' +
-  'subcategories and subpages to generate a random page that is a member of ' +
-  'a given supercategory.',
+  long_description=long_description,
+  long_description_content_type="text/markdown",
   author='Garrett Credi',
   author_email='gcc@ameritech.net',
   url='https://github.com/ddxtanx/wiki_bot',

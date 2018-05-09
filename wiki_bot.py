@@ -72,12 +72,13 @@ def wrapped_request(wiki_obj: str, mode: str) -> List[Dict[str,str]]:
     property_string = 'categorymembers'
     while times < max_times:
         try:
-            req = requests.get(base_url, headers=header_val, params=params)
+            req = requests.get(base_url, headers=header_val, params=params) #type: requests.Response
+            reqJson = req.json()
             if mode != "Pagecats":
-                return req.json()['query'][property_string]
+                return reqJson['query'][property_string]
             else:
-                for key in req.json()['query']['pages']:
-                    return req.json()['query']['pages'][key]['categories']
+                for key in reqJson['query']['pages']:
+                    return reqJson['query']['pages'][key]['categories']
         except requests.exceptions.ConnectionError:
             print_debug(
                 "Retrying {w} due to connection error".format(w=wiki_obj)
@@ -316,20 +317,23 @@ if(__name__ == "__main__"):
                         "fits in category"
                         )
     args = parser.parse_args()
-    print_debug(str(args.check))
+    category = args.category # type: str
+    check = args.check # type: bool
+    save = args.save # type: bool
+    regen = args.regen # type: bool
     DEBUGGING = args.verbose
     max_depth = args.tree_depth
     similarity_val = args.similarity
     wb = WikiBot(max_depth, similarity_val)
-    if(args.save):
+    if(save):
         print_debug("Saving!")
-    if(args.regen):
+    if(regen):
         print_debug("Regenerating!")
 
     print("https://en.wikipedia.org/wiki/" + wb.random_page("Category:" +
-               args.category,
-               save=args.save,
-               regen=args.regen,
-               check=args.check
+               category,
+               save=save,
+               regen=regen,
+               check=check
             )
         )

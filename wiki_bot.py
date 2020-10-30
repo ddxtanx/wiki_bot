@@ -5,7 +5,7 @@ import random
 from typing import Dict, List, Set
 from time import sleep
 
-import requests
+import requests as r
 
 def generate_requests_params(wiki_obj: str, mode: str) -> Dict[str, str]:
     """Generate the params for requests given a category and a mode.

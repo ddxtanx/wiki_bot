@@ -2,7 +2,7 @@
 WikiBot retrieves a random page from a given Wikipedia category, including its
 subcategories.
 
-# Install
+## Install
 From pip:
 ```bash
 pip install wikiBot
@@ -15,14 +15,14 @@ cd wikiBot
 pip install -r
 ```
 
-# Usage
+## Usage
 For best results:
 - Set `tree_depth` to 3 or 4. Higher values tend to pull in loosely-related
   categories.
 - Set `min_similarity` to 0.25 or 0.33. Higher values are likely to return
   relatively few results.
 
-## CLI
+### CLI
 ```bash
 $ python wiki_bot.py -h
 usage: wiki_bot.py [-h] [--tree_depth [TREE_DEPTH]]
@@ -48,7 +48,7 @@ optional arguments:
                         category
 ```
 
-## Module
+### Module
 ```python
 from wiki_bot import WikiBot
 wb = WikiBot(tree_depth, similarity_val)
@@ -56,7 +56,7 @@ wb = WikiBot(tree_depth, similarity_val)
 random_page = wb.randomPage(category,...)
 ```
 
-# Implementation details
+## Implementation details
 We use the [MediaWiki API](https://www.mediawiki.org/wiki/API:Main_page) to
 recursively retrieve subcategories of and pages belonging to a given category.
 The parameter `tree_depth` denotes the maximum depth at which we traverse the
@@ -69,6 +69,6 @@ a given page to the requested category by comparing the proportion of the
 page's categories that are also subcategories of the requested category to a
 user-specified threshold `min_similarity.`
 
-# Contributing
+## Contributing
 Ensure that mypy, flake8, and pylint checks pass, then open a PR or contact
 `gcc@ameritech.net.`

@@ -1,28 +1,11 @@
 """Generate a random page from a wikipedia category."""
 import argparse
+import logging
 import random
 from typing import Dict, List, Set
+from time import sleep
 
 import requests
-
-DEBUGGING = False
-max_depth = 4
-similarity_val = .5
-
-
-def print_debug(debug_str: str) -> None:
-    """Print strings if in debug/verbose mode mode.
-
-    Input:
-        Debug_Str (String): string to be printed
-    Output:
-        None
-    Affect:
-        If in debug mode, print Debug_Str
-    """
-    if DEBUGGING:
-        print("DEBUG: " + debug_str)
-
 
 def generate_requests_params(wiki_obj: str, mode: str) -> Dict[str, str]:
     """Generate the params for requests given a category and a mode.
@@ -63,35 +46,31 @@ def wrapped_request(wiki_obj: str, mode: str) -> List[Dict[str,str]]:
     Output:
         List<String>: wikipedia API data for given request
     """
+
     header = "Garrett Credi's Random Page Bot(Contact @ gcc@ameritech.net)"
     header_val = {'Api-User-Agent': header}
     base_url = 'https://en.wikipedia.org/w/api.php'
     params = generate_requests_params(wiki_obj, mode)
-    max_times = 5
-    times = 0
     property_string = 'categorymembers'
-    while times < max_times:
+
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        sleep(1)
         try:
             req = requests.get(base_url, headers=header_val, params=params) #type: requests.Response
             reqJson = req.json()
             if mode != "Pagecats":
-                return reqJson['query'][property_string]
-            else:
-                for key in reqJson['query']['pages']:
-                    return reqJson['query']['pages'][key]['categories']
-        except requests.exceptions.ConnectionError:
-            print_debug(
-                "Retrying {w} due to connection error".format(w=wiki_obj)
-            )
-            times += 1
-    print_debug(
-        "{w} failed too many times ({t}) times. " +
-        "Moving on".format(
-            w=wiki_obj,
-            t=times
-        )
-    )
-    times = 0
+                return resp_json['query'][property_string]
+
+            for key in resp_json['query']['pages']:
+                return resp_json['query']['pages'][key]['categories']
+
+        except r.exceptions.ConnectionError as conn_error:
+            err_type = type(conn_error).__name__
+            logging.warning("Caught %s, retrying page %s... (attempt %d/%d)",
+                            err_type, wiki_obj, attempt + 1, max_attempts)
+
+    logging.warning("Failed to retrieve %s.", wiki_obj)
     return [{
         'title': wiki_obj
     }]
@@ -121,8 +100,9 @@ class WikiBot():
         current_depth = 1
         single_step_subcategories = [category]
         all_subcategories = []
-        while current_depth <= self.td:
-            print_debug("Current tree depth {d}".format(d=current_depth))
+        while current_depth <= self.tree_depth:
+            logging.debug("Current depth %d", current_depth)
+
             subcategory_temp = []
             if not single_step_subcategories:
                 break
@@ -131,18 +111,14 @@ class WikiBot():
                 subcategories = wrapped_request(subcat, "Subcat")
                 for cat in subcategories:
                     title = cat['title']
-                    print_debug("{subcat} has subcategory {title}".format(
-                        subcat=subcat,
-                        title=title
-                    )
-                    )
+                    logging.debug("Discovered subcategory %s of %s",
+                                  title, subcat)
                     if title not in all_subcategories:
                         all_subcategories.append(title)
                         subcategory_temp.append(title)
                     else:
-                        print_debug(
-                            "{t} already checked. Moving on".format(t=title)
-                        )
+                        logging.debug("Skipping already-visited %s", title)
+
             single_step_subcategories = subcategory_temp
             current_depth += 1
         return all_subcategories
@@ -160,9 +136,9 @@ class WikiBot():
             to {category}_subcats.txt
         """
         filename = "{category}_subcats.txt".format(category=category)
-        print_debug("Saving to {f}".format(f=filename))
-        with open(filename, 'w') as f:
-            f.write("td:" + str(self.td) + "\n")
+        logging.info("Writing subcategories to %s...", filename)
+        with open(filename, 'w') as outfile:
+            outfile.write("depth:" + str(self.tree_depth) + "\n")
             for cat in subcats:
                 f.write(cat + "\n")
 
@@ -184,11 +160,11 @@ class WikiBot():
         Output:
             Set<String>: set of subcategories
         """
-        sub_cats = set() # type: Set[str]
-        file_name = "{category}_subcats.txt".format(category=category)
+        sub_cats: Set[str] = set()
+        filename = "{category}_subcats.txt".format(category=category)
         try:
-            with open(file_name, 'r') as sub_cat_file:
-                print_debug("Reading from {f}".format(f=file_name))
+            with open(filename, 'r') as sub_cat_file:
+                logging.info("Reading subcategories from %s...", filename)
                 file_lines = sub_cat_file.readlines()
                 file_d = int(file_lines[0].split(":")[1].replace("\n", ""))
                 if(file_d < self.td):
@@ -199,10 +175,8 @@ class WikiBot():
                     line = file_lines[i]
                     sub_cats.add(line.replace("\n", ""))
                 sub_cat_file.close()
-        except IOError as io_error:
-            print_debug(
-                "{f} does not exist. Building from network".format(f=file_name)
-            )
+        except IOError:
+            logging.info("Building subcategory cache...")
             sub_cats = self.subcategories_without_duplicates(category)
         return sub_cats
 
@@ -226,8 +200,8 @@ class WikiBot():
             if(title in subcategories):
                 points += 1.0
         score = points / len(page_cats)
-        print_debug("Score of {w} is {s}".format(w=wiki_obj, s=str(score)))
-        if(score >= self.sv):
+        logging.debug("%s has similarity %.2f", wiki_obj, score)
+        if score >= self.min_similarity:
             return True
         return False
 
@@ -245,33 +219,35 @@ class WikiBot():
         sub_cats = set() # type: Set[str]
         if(not regen):
             sub_cats = self.retreive_subcategories_from_location(category)
-        if(regen or (not sub_cats)):
-            print_debug("Rebuilding {category}".format(category=category))
+        if regen or not sub_cats:
+            logging.debug("Building cache for %s", category)
             sub_cats = self.subcategories_without_duplicates(category)
         if(save or regen):
             self.save_array(category, sub_cats)
         random_page = None
         valid_random_page = True
         cat = random.sample(sub_cats, 1)[0]
-        print_debug("Chose category {cat}".format(cat=cat))
+
+        logging.debug("Descending into category %s", cat)
         pages = wrapped_request(cat, mode="Subpage")
-        while(not random_page or not valid_random_page):
+        while (not random_page or not valid_random_page):
             try:
                 random_page = random.choice(pages)
                 title = random_page['title']
-                if(check):
-                    print_debug("Checking " + title)
+                if check:
+                    logging.debug("Checking similarity of %s", title)
                     valid_random_page = self.check_similarity(title, sub_cats)
                     if(not valid_random_page):
                         pages.remove(random_page)
-            except IndexError as a:
-                print_debug("{cat} has no pages. Retrying".format(cat=cat))
+            except IndexError:
+                logging.debug("%s has no pages, retrying...", cat)
+
                 sub_cats.remove(cat)
-                if(len(sub_cats) == 0):
-                    print_debug("No categories left. Sorry!")
-                    raise ValueError("Category inputted is invalid.")
+                if len(sub_cats) == 0:
+                    logging.error("No subcategories had any pages.")
+
                 cat = random.sample(sub_cats, 1)[0]
-                print_debug("Chose category {cat}".format(cat=cat))
+                logging.debug("Descending into category %s", cat)
                 pages = wrapped_request(cat, mode="Subpage")
         return random_page['title']
 
@@ -322,13 +298,20 @@ if(__name__ == "__main__"):
     save = args.save # type: bool
     regen = args.regen # type: bool
     DEBUGGING = args.verbose
-    max_depth = args.tree_depth
-    similarity_val = args.similarity
-    wb = WikiBot(max_depth, similarity_val)
-    if(save):
-        print_debug("Saving!")
-    if(regen):
-        print_debug("Regenerating!")
+
+    wb = WikiBot(args.tree_depth, args.similarity)
+
+    if args.verbose:
+        LOG_LEVEL = logging.DEBUG
+    else:
+        LOG_LEVEL = logging.INFO
+
+    logging.basicConfig(format="%(levelname)s:%(message)s", level=LOG_LEVEL)
+
+    if args.save:
+        logging.debug("Caching to file...")
+    if args.regen:
+        logging.debug("Regenerating cache...")
 
     print("https://en.wikipedia.org/wiki/" + wb.random_page("Category:" +
                category,

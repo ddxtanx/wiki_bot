@@ -4,6 +4,7 @@ import logging
 import random
 from typing import Dict, List, Set, Iterable, Optional
 from time import sleep
+from urllib.parse import quote
 
 import requests as r
 
@@ -12,17 +13,25 @@ def wrapped_request(wiki_obj: str, mode: str) -> List[Dict[str, str]]:
     """Wrap a request to deal with connection errors.
 
     :param wiki_obj: name of page or category to process
-    :param mode: type of pages to retrieve; one of "Subcat",
-                 "Subpage", "Pagecats"
+    :param mode: type of pages to retrieve; one of "subcat",
+                "subpage", "pagecats"
     :returns: MediaWiki API response data
     """
 
     def build_params():
+        if mode == "title":
+            params = {
+                "format": "json",
+                "action": "query",
+                "titles": wiki_obj
+            }
+            return params
+
         if mode == "pagecats":
             params = {
                 "format": "json",
                 "action": "query",
-                "titles": wiki_obj,
+                "pageids": wiki_obj,
                 "prop": "categories"
             }
             return params
@@ -38,13 +47,14 @@ def wrapped_request(wiki_obj: str, mode: str) -> List[Dict[str, str]]:
             "format": "json",
             "action": "query",
             "list": "categorymembers",
-            "cmtitle": wiki_obj,
+            "cmpageid": wiki_obj,
             "cmtype": cmtype
         }
         return params
 
     user_agent = ("wiki_bot/1.2.1 (https://github.com/ddxtanx/wiki_bot; "
                   "gcc@ameritech.net)")
+    header = {"Api-User-Agent": user_agent}
 
     params = build_params()
 
@@ -56,24 +66,48 @@ def wrapped_request(wiki_obj: str, mode: str) -> List[Dict[str, str]]:
         try:
             base_url = "https://en.wikipedia.org/w/api.php"
             resp: r.Response = r.get(base_url,
-                                     headers={"Api-User-Agent": user_agent},
+                                     headers=header,
                                      params=params)
+
             resp_json = resp.json()
 
             if mode == "pagecats":
                 for key in resp_json["query"]["pages"]:
                     return resp_json["query"]["pages"][key]["categories"]
 
+            if mode == "title":
+                return list(resp_json["query"]["pages"].keys())[0]
+
             return resp_json["query"]["categorymembers"]
         except r.exceptions.ConnectionError as conn_error:
             err_type = type(conn_error).__name__
-            logging.warning("Caught %s, retrying page %s... (attempt %d/%d)",
+            logging.warning("Caught %s, retrying page %s. (attempt %d/%d)",
                             err_type, wiki_obj, attempt + 1, max_attempts)
 
     logging.warning("Failed to retrieve %s.", wiki_obj)
     return [{
         "title": wiki_obj
     }]
+
+
+def similarity(wiki_obj: str, subcategories: Set[str]) -> bool:
+    """
+    Return the similarity of page/category to a list of subcategories.
+
+    :param wiki_obj: page or category to check similarity of
+    :param subcategories: set of subcategories to compare against
+
+    :returns: similarity score for `wiki_obj`
+    """
+    page_cats = wrapped_request(wiki_obj, "pagecats")
+
+    points = 0.0
+    for cat in page_cats:
+        wiki_obj = cat["pageid"]
+        if wiki_obj in subcategories:
+            points += 1.0
+
+    return points / len(page_cats)
 
 
 class WikiBot():
@@ -86,8 +120,9 @@ class WikiBot():
         :param tree_depth: maximum tree depth to descend
         :param min_similarity: minimum similarity threshold
         """
-        self.td = tree_depth
-        self.sv = similarity_val
+        self.tree_depth = tree_depth
+        self.min_similarity = min_similarity
+        self.use_titles = False
 
     def get_subcategories(self,
                           category: str,
@@ -108,14 +143,16 @@ class WikiBot():
 
         if depth < self.tree_depth:
             for subcat in wrapped_request(category, "subcat"):
-                if subcat["title"] in visited:
+                wiki_obj = subcat["pageid"]
+
+                if wiki_obj in visited:
                     logging.debug("Skipping already-visited subcategory %s",
-                                  subcat["title"])
+                                  wiki_obj)
                 else:
                     logging.debug("(depth %d) Discovered subcategory %s of %s",
-                                  depth, subcat["title"], category)
+                                  depth + 1, wiki_obj, category)
 
-                    yield from self.get_subcategories(subcat["title"],
+                    yield from self.get_subcategories(wiki_obj,
                                                       depth=depth + 1,
                                                       visited=visited)
 
@@ -134,64 +171,44 @@ class WikiBot():
             outfile.write("depth:" + str(self.tree_depth) + "\n")
             outfile.write("\n".join(subcats))
 
-    def subcategories_without_duplicates(self, category: str) -> Set[str]:
+    def get_all_subcategories(self, category: str) -> List[str]:
         """
         :param category: category to return subcategories of
         :returns: deduplicated list of subcategories of `category`
         """
-        return set(self.get_subcategories(category))
+        return list(self.get_subcategories(category))
 
-    def retrieve_subcategories_from_location(self, category: str) -> Set[str]:
+    def import_subcategories(self, category: str) -> List[str]:
         """
         Get subcategories from file, or generate them from scratch.
 
         :param category: category to retrieve subcategories of
         :returns: set of subcategories
         """
-        sub_cats: Set[str] = set()
         filename = "{category}_subcats.txt".format(category=category)
+
         try:
-            with open(filename, 'r') as sub_cat_file:
-                logging.info("Reading subcategories from %s...", filename)
-                file_lines = sub_cat_file.readlines()
-                file_d = int(file_lines[0].split(":")[1].replace("\n", ""))
-                if(file_d < self.td):
-                    subcats = self.subcategories_without_duplicates(category)
-                    self.save_array(category, subcats)
-                    return sub_cats
-                for i in range(1, len(file_lines)):
-                    line = file_lines[i]
-                    sub_cats.add(line.replace("\n", ""))
-                sub_cat_file.close()
+            with open(filename, 'r') as cache_file:
+                logging.info("Cache found at %s.", filename)
+                file_lines = cache_file.splitlines()
+
+                file_depth = int(file_lines[0].split(":")[1])
         except IOError:
-            logging.info("Building subcategory cache...")
-            sub_cats = self.subcategories_without_duplicates(category)
-        return sub_cats
+            logging.info("Cache not found at %s.", filename)
+            subcats = self.get_all_subcategories(category)
+            return list(subcats)
 
-    def check_similarity(self, wiki_obj: str, subcategories: Set[str]) -> bool:
-        """
-        Check the similarity of page/category to a list of subcategories.
+        if file_depth < self.tree_depth:
+            logging.info("Updating cache from depth %d to depth %d.",
+                         file_depth, self.tree_depth)
 
-        :param wiki_obj: page or category to check similarity of
-        :param subcategories: set of subcategories to compare against
+            subcats = self.get_all_subcategories(category)
+            self.save_array(category, subcats)
 
-        :returns: whether `wiki_obj >= min_similarity`
-        """
-        page_cats = wrapped_request(wiki_obj, "pagecats")
+            return list(subcats)
 
-        if len(page_cats) == 1:
-            return self.check_similarity(page_cats[0]['title'], subcategories)
-
-        points = 0.0
-        for cat in page_cats:
-            title = cat['title']
-            if(title in subcategories):
-                points += 1.0
-
-        score = points / len(page_cats)
-        logging.debug("%s has similarity %.2f", wiki_obj, score)
-
-        return score >= self.min_similarity
+        subcats = file_lines[1:]
+        return subcats
 
     def random_page(self,
                     category: str,
@@ -208,19 +225,18 @@ class WikiBot():
         :returns: a random page belonging to `category` or to one of its
                   subcategories
         """
-        sub_cats: Set[str] = set()
-
-        if not regen:
-            sub_cats = self.retrieve_subcategories_from_location(category)
-        if regen or not sub_cats:
-            logging.debug("Building cache for %s", category)
-            sub_cats = self.subcategories_without_duplicates(category)
-        if save or regen:
-            self.save_array(category, sub_cats)
+        if regen:
+            logging.debug("Regenerating cache for %s", category)
+            subcats = self.get_all_subcategories(category)
+            self.save_array(category, subcats)
+        else:
+            subcats = self.import_subcategories(category)
+            if save:
+                self.save_array(category, subcats)
 
         random_page = None
         valid_random_page = True
-        cat = random.sample(sub_cats, 1)[0]
+        cat = random.sample(subcats, 1)[0]
 
         logging.debug("Descending into category %s", cat)
         pages = wrapped_request(cat, "subpage")
@@ -228,24 +244,27 @@ class WikiBot():
         while (not random_page or not valid_random_page):
             try:
                 random_page = random.choice(pages)
-                title = random_page['title']
+                wiki_obj = random_page["pageid"]
+
                 if check:
-                    logging.debug("Checking similarity of %s", title)
-                    valid_random_page = self.check_similarity(title, sub_cats)
-                    if(not valid_random_page):
+                    logging.debug("Checking similarity of %s", wiki_obj)
+                    page_similarity = similarity(wiki_obj, subcats)
+                    valid_random_page = page_similarity >= self.min_similarity
+                    if not valid_random_page:
                         pages.remove(random_page)
 
             except IndexError:
                 logging.debug("%s has no pages, retrying...", cat)
 
-                sub_cats.remove(cat)
-                if len(sub_cats) == 0:
+                subcats.remove(cat)
+                if len(subcats) == 0:
                     logging.error("No subcategories had any pages.")
 
-                cat = random.sample(sub_cats, 1)[0]
+                cat = random.sample(subcats, 1)[0]
                 logging.debug("Descending into category %s", cat)
-                pages = wrapped_request(cat, mode="Subpage")
-        return random_page['title']
+                pages = wrapped_request(cat, "subpage")
+
+        return random_page["title"]
 
 
 if(__name__ == "__main__"):
@@ -309,10 +328,11 @@ if(__name__ == "__main__"):
     if args.regen:
         logging.debug("Regenerating cache...")
 
-    print("https://en.wikipedia.org/wiki/" + wb.random_page("Category:" +
-               category,
-               save=save,
-               regen=regen,
-               check=check
-            )
-        )
+    category_id = wrapped_request("Category:" + args.category, "title")
+
+    random_page_title = wb.random_page(category_id,
+                                       save=args.save,
+                                       regen=args.regen,
+                                       check=args.check)
+
+    print("https://en.wikipedia.org/wiki/" + quote(random_page_title))

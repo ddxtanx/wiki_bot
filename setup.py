@@ -14,6 +14,7 @@ setup(
   license='MIT',
   download_url='https://github.com/ddxtanx/wiki_bot/archive/1.1.tar.gz',
   py_modules=["wiki_bot"],
+  package_dir={'': 'wiki_bot'},
   keywords=['wikipedia', 'random', 'generator', 'command_line', 'api', 'mypy', 'library', 'wiki'],
   classifiers=[
       "Development Status :: 5 - Production/Stable",
@@ -25,5 +26,5 @@ setup(
       "Programming Language :: Python :: 3.6",
       "Topic :: Internet :: WWW/HTTP :: Indexing/Search"
   ],
-  install_requires=['requests', 'mypy']
+  install_requires=['requests']
 )

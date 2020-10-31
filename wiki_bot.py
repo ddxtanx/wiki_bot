@@ -7,29 +7,33 @@ from time import sleep
 
 import requests as r
 
+
 def generate_requests_params(wiki_obj: str, mode: str) -> Dict[str, str]:
     """Generate the params for requests given a category and a mode.
 
     See wrapped_request for variable descriptions
     """
-    cmtype = ""
     if mode == "Subcat":
-        cmtype = 'subcat'
+        cmtype = "subcat"
     elif mode == "Subpage":
-        cmtype = 'page'
+        cmtype = "page"
+    else:
+        cmtype = "subcat|page"
+
     params = {
-        'format': 'json',
-        'action': 'query',
-        'list': 'categorymembers',
-        'cmtitle': wiki_obj,
-        'cmtype': cmtype
+        "format": "json",
+        "action": "query",
+        "list": "categorymembers",
+        "cmtitle": wiki_obj,
+        "cmtype": cmtype
     }
+
     if mode == "Pagecats":
         params = {
-            'format': 'json',
-            'action': 'query',
-            'titles': wiki_obj,
-            'prop': 'categories'
+            "format": "json",
+            "action": "query",
+            "titles": wiki_obj,
+            "prop": "categories"
         }
     return params
 
@@ -79,23 +83,22 @@ def wrapped_request(wiki_obj: str, mode: str) -> List[Dict[str,str]]:
 class WikiBot():
     """WikiBot Class."""
 
-    def __init__(self, tree_depth: int, similarity_val: float) -> None:
-        """Init Method for WikiBot.
+    def __init__(self, tree_depth: int, min_similarity: float):
+        """
+        Constructor.
 
-        Input:
-            Tree_Depth <Natural Number>
-            SimilarityVal <Float>
+        :param tree_depth: maximum tree depth to descend
+        :param min_similarity: minimum similarity threshold
         """
         self.td = tree_depth
         self.sv = similarity_val
 
     def get_subcategories(self, category: str) -> List[str]:
-        """Get subcategories of a given subcategory.
+        """
+        Get subcategories of a given subcategory.
 
-        Input:
-            Category (String): category to generate subcats of
-        Output:
-            List<Strings>: list of subcategories
+        :param category: category to generate subcategories of
+        :returns: list of subcategories
         """
         current_depth = 1
         single_step_subcategories = [category]
@@ -124,16 +127,12 @@ class WikiBot():
         return all_subcategories
 
     def save_array(self, category: str, subcats: Set[str]) -> None:
-        """Save array to file.
+        """
+        Write array to `{category}_subcats.txt`.
+        TODO Add filename to argparse.
 
-        Input:
-            Category: category that subcats belong to
-            Subcats List<String>: subcats of category
-        Output:
-            None
-        Affect:
-            If user has requisite permissions, subcategory list is saved
-            to {category}_subcats.txt
+        :param category: root category
+        :param subcats: list of subcategories to write
         """
         filename = "{category}_subcats.txt".format(category=category)
         logging.info("Writing subcategories to %s...", filename)
@@ -143,22 +142,18 @@ class WikiBot():
                 f.write(cat + "\n")
 
     def subcategories_without_duplicates(self, category: str) -> Set[str]:
-        """Generate a list of subcategories without duplicates.
-
-        Input:
-            Subcats List<String>: list of subcategories
-        Output:
-            Set<String>: set of subcategories without any duplicates
+        """
+        :param category: category to return subcategories of
+        :returns: deduplicated list of subcategories of `category`
         """
         return set(self.get_subcategories(category))
 
     def retreive_subcategories_from_location(self, category: str) -> Set[str]:
-        """Get subcategories from file, or generate them from scratch.
+        """
+        Get subcategories from file, or generate them from scratch.
 
-        Input:
-            Category (String): category to retreive subcats from.
-        Output:
-            Set<String>: set of subcategories
+        :param category: category to retrieve subcategories of
+        :returns: set of subcategories
         """
         sub_cats: Set[str] = set()
         filename = "{category}_subcats.txt".format(category=category)
@@ -181,13 +176,13 @@ class WikiBot():
         return sub_cats
 
     def check_similarity(self, wiki_obj: str, subcategories: Set[str]) -> bool:
-        """Check the similarity of page/category to a list of subcategories.
+        """
+        Check the similarity of page/category to a list of subcategories.
 
-        Input:
-            Wiki_Obj (String): page or category to check similarity of
-            Subcategories (Set<String>): set of subcategories
-        Output:
-            Boolean: whether or not wiki_obj is similar enough to subcategories
+        :param wiki_obj: page or category to check similarity of
+        :param subcategories: set of subcategories to compare against
+
+        :returns: whether `wiki_obj >= min_similarity`
         """
         page_cats = wrapped_request(wiki_obj, mode="Pagecats")
         points = 0.0
@@ -205,16 +200,20 @@ class WikiBot():
             return True
         return False
 
-    def random_page(self, category: str, save: bool, regen: bool, check: bool) ->str:
-        """Generate a random page from a category.
+    def random_page(self,
+                    category: str,
+                    save: bool,
+                    regen: bool,
+                    check: bool) -> str:
+        """
+        Generate a random page from a category.
 
-        Input:
-            Category (String): category to get page from
-            Save (Boolean): whether or not to save subcategories to a file
-            Regen (Boolean): whether or not to regenerate subcategory set
-            Check (Boolean): whether or not to check page similarity
-        Output:
-            String: A random page belonging to category, or one of its subcats
+        :param category: category to get page from
+        :param save: whether to save subcategories to a file
+        :param regen: whether to regenerate subcategory cache
+        :param check: whether to check page similarity
+        :returns: a random page belonging to `category` or to one of its
+                  subcategories
         """
         sub_cats = set() # type: Set[str]
         if(not regen):
@@ -222,7 +221,7 @@ class WikiBot():
         if regen or not sub_cats:
             logging.debug("Building cache for %s", category)
             sub_cats = self.subcategories_without_duplicates(category)
-        if(save or regen):
+        if save or regen:
             self.save_array(category, sub_cats)
         random_page = None
         valid_random_page = True
@@ -239,6 +238,7 @@ class WikiBot():
                     valid_random_page = self.check_similarity(title, sub_cats)
                     if(not valid_random_page):
                         pages.remove(random_page)
+
             except IndexError:
                 logging.debug("%s has no pages, retrying...", cat)
 
@@ -268,7 +268,7 @@ if(__name__ == "__main__"):
     parser.add_argument('--similarity',
                         nargs='?',
                         type=float,
-                        default=.5,
+                        default=.25,
                         help="What percent of page categories need to be " +
                         "in subcategory array. Must be used with -c/--check")
     parser.add_argument("-s",

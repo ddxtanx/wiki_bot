@@ -2,7 +2,7 @@
 import argparse
 import logging
 import random
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Iterable, Optional
 from time import sleep
 
 import requests as r
@@ -89,38 +89,35 @@ class WikiBot():
         self.td = tree_depth
         self.sv = similarity_val
 
-    def get_subcategories(self, category: str) -> List[str]:
+    def get_subcategories(self,
+                          category: str,
+                          depth: int = 0,
+                          visited: Optional[List[str]] = None
+                          ) -> Iterable[str]:
         """
         Get subcategories of a given subcategory.
 
         :param category: category to generate subcategories of
         :returns: list of subcategories
         """
-        current_depth = 1
-        single_step_subcategories = [category]
-        all_subcategories = []
-        while current_depth <= self.tree_depth:
-            logging.debug("Current depth %d", current_depth)
+        if visited is None:
+            visited = []
 
-            subcategory_temp = []
-            if not single_step_subcategories:
-                break
-            for subcat in single_step_subcategories:
-                all_subcategories.append(subcat)
-                subcategories = wrapped_request(subcat, "subcat")
-                for cat in subcategories:
-                    title = cat['title']
-                    logging.debug("Discovered subcategory %s of %s",
-                                  title, subcat)
-                    if title not in all_subcategories:
-                        all_subcategories.append(title)
-                        subcategory_temp.append(title)
-                    else:
-                        logging.debug("Skipping already-visited %s", title)
+        visited.append(category)
+        yield category
 
-            single_step_subcategories = subcategory_temp
-            current_depth += 1
-        return all_subcategories
+        if depth < self.tree_depth:
+            for subcat in wrapped_request(category, "subcat"):
+                if subcat["title"] in visited:
+                    logging.debug("Skipping already-visited subcategory %s",
+                                  subcat["title"])
+                else:
+                    logging.debug("(depth %d) Discovered subcategory %s of %s",
+                                  depth, subcat["title"], category)
+
+                    yield from self.get_subcategories(subcat["title"],
+                                                      depth=depth + 1,
+                                                      visited=visited)
 
     def save_array(self, category: str, subcats: Set[str]) -> None:
         """

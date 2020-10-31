@@ -101,13 +101,11 @@ def similarity(wiki_obj: str, subcategories: Set[str]) -> bool:
     """
     page_cats = wrapped_request(wiki_obj, "pagecats")
 
-    points = 0.0
-    for cat in page_cats:
-        wiki_obj = cat["pageid"]
-        if wiki_obj in subcategories:
-            points += 1.0
+    matching_cats = [cat for cat in page_cats if cat in subcategories]
 
-    return points / len(page_cats)
+    score = len(matching_cats) / len(page_cats)
+    logging.debug("%s has score %.2f", wiki_obj, score)
+    return score
 
 
 class WikiBot():

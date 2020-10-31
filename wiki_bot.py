@@ -267,43 +267,44 @@ class WikiBot():
 
 if(__name__ == "__main__"):
     parser = argparse.ArgumentParser(
-        description="Get a random page from a wikipedia category"
+        description=("Retrieve a random page from a Wikipedia category, "
+                     "including its subcategories.")
     )
-    parser.add_argument('category',
-                        help="The category you wish to get a page from."
+    parser.add_argument("category",
+                        help="the root category to retrieve from"
                         )
-    parser.add_argument('--tree_depth',
-                        nargs='?',
+    parser.add_argument("--tree_depth",
+                        nargs="?",
                         type=int,
                         default=4,
-                        help="How far down to traverse the subcategory tree"
+                        help="maximum depth totraverse the subcategory tree"
                         )
-    parser.add_argument('--similarity',
-                        nargs='?',
+    parser.add_argument("--similarity",
+                        nargs="?",
                         type=float,
                         default=.25,
-                        help="What percent of page categories need to be " +
-                        "in subcategory array. Must be used with -c/--check")
-    parser.add_argument("-s",
-                        "--save",
+                        help=("if used with --check, the minimum proportion "
+                              "of page categories appearing in the list of "
+                              "visited subcategories")
+                        )
+    parser.add_argument("-s", "--save",
                         action="store_true",
-                        help="Save subcategories to a file for quick re-runs"
+                        help="save subcategories to a file for quick reruns"
                         )
     parser.add_argument("-r",
                         "--regen",
                         action="store_true",
-                        help="Regenerate the subcategory file"
+                        help="regenerate the subcategory file"
                         )
     parser.add_argument("-v",
                         "--verbose",
                         action="store_true",
-                        help="Print debug lines"
+                        help="print debug lines"
                         )
     parser.add_argument("-c",
                         "--check",
                         action="store_true",
-                        help="After finding page check to see that it truly " +
-                        "fits in category"
+                        help="check similarity of a page before returning it"
                         )
     args = parser.parse_args()
     category = args.category # type: str
@@ -333,4 +334,5 @@ if(__name__ == "__main__"):
                                        regen=args.regen,
                                        check=args.check)
 
+    random_page_title = random_page_title.replace(" ", "_")
     print("https://en.wikipedia.org/wiki/" + quote(random_page_title))

@@ -1,11 +1,12 @@
 """Generate a random page from a wikipedia category."""
 import argparse
+import json
 import logging
 import random
-from typing import List, Iterable, Optional
+from typing import List, Dict, Iterable, Optional
 from urllib.parse import quote
 
-from wiki_requests import (request_subcategories,
+from wiki_requests import (request_category_info,
                            request_subpages,
                            request_page_categories,
                            request_pageid_from_title)
@@ -44,90 +45,98 @@ class WikiBot():
         self.use_titles = False
 
     def get_subcategories(self,
-                          category: str,
+                          category_id: str,
                           depth: int = 0,
                           visited: Optional[List[str]] = None
-                          ) -> Iterable[str]:
+                          ) -> Iterable[Dict[str, int]]:
         """
         Get subcategories of a given subcategory.
 
-        :param category: category to generate subcategories of
+        :param category_id: id of category to generate subcategories of
         :returns: list of subcategories
         """
         if visited is None:
             visited = []
 
-        visited.append(category)
-        yield str(category)
+        visited.append(category_id)
 
         if depth < self.tree_depth:
-            for subcat in request_subcategories(category):
-                wiki_obj = subcat["pageid"]
+            category_info = request_category_info(category_id)
 
-                if wiki_obj in visited:
+            page_count = category_info["page_count"]
+            yield {category_id: page_count}
+
+            for subcat in category_info["subcats"]:
+                subcat_id = subcat["pageid"]
+
+                if subcat_id in visited:
                     logging.debug("Skipping already-visited subcategory %s",
-                                  wiki_obj)
+                                  subcat_id)
                 else:
                     logging.debug("(depth %d) Discovered subcategory %s of %s",
-                                  depth + 1, wiki_obj, category)
+                                  depth + 1, subcat_id, category_id)
 
-                    yield from self.get_subcategories(wiki_obj,
+                    yield from self.get_subcategories(subcat_id,
                                                       depth=depth + 1,
                                                       visited=visited)
 
     def save_array(self, category: str, subcats: Iterable[str]):
         """
-        Write array to `{category}_subcats.txt`.
+        Write array to `{category}_subcats.json`.
         TODO Add filename to argparse.
 
         :param category: root category
         :param subcats: list of subcategories to write
         """
-        filename = "{category}_subcats.txt".format(category=category)
+        filename = "{category}_subcats.json".format(category=category)
         logging.info("Writing subcategories to %s...", filename)
 
-        with open(filename, 'w') as outfile:
-            outfile.write("depth:" + str(self.tree_depth) + "\n")
-            outfile.write("\n".join(subcats))
+        cache = {"depth": self.tree_depth,
+                 "subcats": subcats}
 
-    def get_all_subcategories(self, category: str) -> List[str]:
+        with open(filename, 'w') as outfile:
+            json.dump(cache, outfile)
+
+    def get_all_subcategories(self, category: str) -> Dict[str, int]:
         """
         :param category: category to return subcategories of
         :returns: deduplicated list of subcategories of `category`
         """
-        return list(self.get_subcategories(category))
+        subcats = {}
+        for subcat in self.get_subcategories(category):
+            subcats.update(subcat)
 
-    def import_subcategories(self, category: str) -> List[str]:
+        return subcats
+
+    def import_subcategories(self, category: str) -> Dict[str, int]:
         """
         Get subcategories from file, or generate them from scratch.
 
         :param category: category to retrieve subcategories of
         :returns: set of subcategories
         """
-        filename = "{category}_subcats.txt".format(category=category)
+        filename = "{category}_subcats.json".format(category=category)
 
         try:
             with open(filename, 'r') as cache_file:
                 logging.info("Cache found at %s.", filename)
-                file_lines = cache_file.read().splitlines()
+                cache = json.load(cache_file)
+                subcats = cache["subcats"]
 
-                file_depth = int(file_lines[0].split(":")[1])
+                file_depth = cache["depth"]
+
+            if file_depth < self.tree_depth:
+                logging.info("Updating cache from depth %d to depth %d.",
+                             file_depth, self.tree_depth)
+
+                subcats = self.get_all_subcategories(category)
+                self.save_array(category, subcats)
+
+            return subcats
         except IOError:
             logging.info("Cache not found at %s.", filename)
             subcats = self.get_all_subcategories(category)
-            return list(subcats)
-
-        if file_depth < self.tree_depth:
-            logging.info("Updating cache from depth %d to depth %d.",
-                         file_depth, self.tree_depth)
-
-            subcats = self.get_all_subcategories(category)
-            self.save_array(category, subcats)
-
-            return list(subcats)
-
-        subcats = file_lines[1:]
-        return subcats
+            return subcats
 
     def random_page(self,
                     category: str,
@@ -153,37 +162,33 @@ class WikiBot():
             if save:
                 self.save_array(category, subcats)
 
-        random_page = None
-        valid_random_page = True
-        cat = random.sample(subcats, 1)[0]
+        while subcats:
+            subcat_names = list(subcats.keys())
+            subcat_freqs = list(subcats.values())
+            category = random.choices(subcat_names, weights=subcat_freqs)[0]
 
-        logging.debug("Descending into category %s", cat)
-        pages = request_subpages(cat)
+            logging.debug("Trying category %s", category)
+            pages = request_subpages(category)
 
-        while (not random_page or not valid_random_page):
             try:
-                random_page = random.choice(pages)
-                wiki_obj = random_page["pageid"]
+                found_match = False
+                while not found_match:
+                    random_page = random.choice(pages)
+                    page_id = random_page["pageid"]
 
-                if check:
-                    logging.debug("Checking similarity of %s", wiki_obj)
-                    page_similarity = similarity(wiki_obj, subcats)
-                    valid_random_page = page_similarity >= self.min_similarity
-                    if not valid_random_page:
+                    page_similarity = similarity(page_id, subcats)
+                    if check and page_similarity < self.min_similarity:
+                        del subcats[category]
                         pages.remove(random_page)
+                    else:
+                        found_match = True
 
+                return random_page["title"]
             except IndexError:
-                logging.debug("%s has no pages, retrying...", cat)
+                logging.debug("%s has no matching pages.", category)
+                subcat_names.remove(category)
 
-                subcats.remove(cat)
-                if len(subcats) == 0:
-                    logging.error("No subcategories had any pages.")
-
-                cat = random.sample(subcats, 1)[0]
-                logging.debug("Descending into category %s", cat)
-                pages = request_subpages(cat)
-
-        return random_page["title"]
+        raise ValueError("Couldn't find any matching pages.")
 
 
 if __name__ == "__main__":

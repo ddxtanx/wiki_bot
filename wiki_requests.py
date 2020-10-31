@@ -6,28 +6,34 @@ from time import sleep
 import logging
 import requests as r  # pylint:disable=import-error
 
+# TODO This is a sloppy type annotation, but mypy doesn't have JSON support yet
+JSON = Dict[str, Any]
 
-def request_subcategories(category_id: str) -> List[Dict[str, str]]:
-    """
-    Return the subcategories of a given category.
 
-    :param category_id: the pageid of the category
-    :returns: a list of subcategories
-    """
+def request_category_info(category_id: str) -> JSON:
     params = {
         "format": "json",
         "action": "query",
         "list": "categorymembers",
         "cmpageid": category_id,
-        "cmtype": "subcat"
+        "cmtype": "subcat|page",
+        "cmlimit": 500
     }
 
     resp = wrapped_request(params)
-    subcats: List[Dict[str, str]] = resp["query"]["categorymembers"]
-    return subcats
+    members: List[JSON] = resp["query"]["categorymembers"]
+    subcats = [member for member in members
+               if member["title"].startswith("Category:")]
+
+    page_count = len(members) - len(subcats)
+
+    category_info = {"page_count": page_count,
+                      "subcats": subcats}
+
+    return category_info
 
 
-def request_subpages(category_id: str) -> List[Dict[str, str]]:
+def request_subpages(category_id: str) -> List[JSON]:
     """
     Return the subpages of a given category.
 
@@ -39,11 +45,12 @@ def request_subpages(category_id: str) -> List[Dict[str, str]]:
         "action": "query",
         "list": "categorymembers",
         "cmpageid": category_id,
-        "cmtype": "page"
+        "cmtype": "page",
+        "cmlimit": 500
     }
 
     resp = wrapped_request(params)
-    subpages: List[Dict[str, str]] = resp["query"]["categorymembers"]
+    subpages: List[JSON] = resp["query"]["categorymembers"]
     return subpages
 
 
@@ -59,7 +66,8 @@ def request_page_categories(page_id: str) -> List[str]:
         "action": "query",
         "pageids": page_id,
         "generator": "categories",
-        "prop": "info"
+        "prop": "info",
+        "cllimit": 500
     }
 
     resp = wrapped_request(params)
@@ -85,8 +93,7 @@ def request_pageid_from_title(page_title: str) -> str:
     return pageid
 
 
-# TODO This is a sloppy type annotation, but mypy doesn't have JSON support
-def wrapped_request(params: Dict[str, str]) -> Dict[str, Any]:
+def wrapped_request(params: JSON) -> JSON:
     """Wrap a request to deal with connection errors.
 
     :param params: request parameters

@@ -32,7 +32,8 @@ def wrapped_request(wiki_obj: str, mode: str) -> List[Dict[str, str]]:
                 "format": "json",
                 "action": "query",
                 "pageids": wiki_obj,
-                "prop": "categories"
+                "generator": "categories",
+                "prop": "info"
             }
             return params
 
@@ -72,8 +73,7 @@ def wrapped_request(wiki_obj: str, mode: str) -> List[Dict[str, str]]:
             resp_json = resp.json()
 
             if mode == "pagecats":
-                for key in resp_json["query"]["pages"]:
-                    return resp_json["query"]["pages"][key]["categories"]
+                return [str(k) for k in resp_json["query"]["pages"].keys()]
 
             if mode == "title":
                 return list(resp_json["query"]["pages"].keys())[0]
@@ -139,7 +139,7 @@ class WikiBot():
             visited = []
 
         visited.append(category)
-        yield category
+        yield str(category)
 
         if depth < self.tree_depth:
             for subcat in wrapped_request(category, "subcat"):
@@ -190,7 +190,7 @@ class WikiBot():
         try:
             with open(filename, 'r') as cache_file:
                 logging.info("Cache found at %s.", filename)
-                file_lines = cache_file.splitlines()
+                file_lines = cache_file.read().splitlines()
 
                 file_depth = int(file_lines[0].split(":")[1])
         except IOError:

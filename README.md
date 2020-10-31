@@ -5,13 +5,13 @@ subcategories.
 ## Install
 From pip:
 ```bash
-pip install wikiBot
+pip install wiki_bot
 ```
 
 Locally:
 ```bash
-git clone https://github.com/ddxtanx/wikiBot
-cd wikiBot
+git clone https://github.com/ddxtanx/wiki_bot
+cd wiki_bot
 pip install -r
 ```
 
@@ -25,27 +25,28 @@ For best results:
 ### CLI
 ```bash
 $ python wiki_bot.py -h
+
 usage: wiki_bot.py [-h] [--tree_depth [TREE_DEPTH]]
                    [--similarity [SIMILARITY]] [-s] [-r] [-v] [-c]
                    category
 
-Get a random page from a wikipedia category
+Retrieve a random page from a Wikipedia category, including its subcategories.
 
 positional arguments:
-  category              The category you wish to get a page from.
+  category              the root category to retrieve from
 
 optional arguments:
   -h, --help            show this help message and exit
   --tree_depth [TREE_DEPTH]
-                        How far down to traverse the subcategory tree
+                        maximum depth to traverse the subcategory tree
   --similarity [SIMILARITY]
-                        What percent of page categories need to be in
-                        subcategory array. Must be used with -c/--check
-  -s, --save            Save subcategories to a file for quick re-runs
-  -r, --regen           Regenerate the subcategory file
-  -v, --verbose         Print debug lines
-  -c, --check           After finding page check to see that it truly fits in
-                        category
+                        if used with --check, the minimum proportion of page
+                        categories appearing in the list of visited
+                        subcategories
+  -s, --save            save subcategories to a file for quick reruns
+  -r, --regen           regenerate the subcategory file
+  -v, --verbose         print debug lines
+  -c, --check           check similarity of a page before returning it
 ```
 
 ### Module

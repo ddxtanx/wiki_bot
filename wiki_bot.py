@@ -265,7 +265,7 @@ class WikiBot():
         return random_page["title"]
 
 
-if(__name__ == "__main__"):
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description=("Retrieve a random page from a Wikipedia category, "
                      "including its subcategories.")
@@ -277,7 +277,7 @@ if(__name__ == "__main__"):
                         nargs="?",
                         type=int,
                         default=4,
-                        help="maximum depth totraverse the subcategory tree"
+                        help="maximum depth to traverse the subcategory tree"
                         )
     parser.add_argument("--similarity",
                         nargs="?",
@@ -307,11 +307,6 @@ if(__name__ == "__main__"):
                         help="check similarity of a page before returning it"
                         )
     args = parser.parse_args()
-    category = args.category # type: str
-    check = args.check # type: bool
-    save = args.save # type: bool
-    regen = args.regen # type: bool
-    DEBUGGING = args.verbose
 
     wb = WikiBot(args.tree_depth, args.similarity)
 

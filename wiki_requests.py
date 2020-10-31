@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+"""Functions for wrapped MediaWiki API requests."""
 
 from typing import List, Dict, Any
 from time import sleep

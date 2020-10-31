@@ -2,95 +2,16 @@
 import argparse
 import logging
 import random
-from typing import Dict, List, Set, Iterable, Optional
-from time import sleep
+from typing import List, Iterable, Optional
 from urllib.parse import quote
 
-import requests as r
+from wiki_requests import (request_subcategories,
+                           request_subpages,
+                           request_page_categories,
+                           request_pageid_from_title)
 
 
-def wrapped_request(wiki_obj: str, mode: str) -> List[Dict[str, str]]:
-    """Wrap a request to deal with connection errors.
-
-    :param wiki_obj: name of page or category to process
-    :param mode: type of pages to retrieve; one of "subcat",
-                "subpage", "pagecats"
-    :returns: MediaWiki API response data
-    """
-
-    def build_params():
-        if mode == "title":
-            params = {
-                "format": "json",
-                "action": "query",
-                "titles": wiki_obj
-            }
-            return params
-
-        if mode == "pagecats":
-            params = {
-                "format": "json",
-                "action": "query",
-                "pageids": wiki_obj,
-                "generator": "categories",
-                "prop": "info"
-            }
-            return params
-
-        if mode == "subcat":
-            cmtype = "subcat"
-        elif mode == "subpage":
-            cmtype = "page"
-        else:
-            raise ValueError("Unknown mode for wrapped_request.")
-
-        params = {
-            "format": "json",
-            "action": "query",
-            "list": "categorymembers",
-            "cmpageid": wiki_obj,
-            "cmtype": cmtype
-        }
-        return params
-
-    user_agent = ("wiki_bot/1.2.1 (https://github.com/ddxtanx/wiki_bot; "
-                  "gcc@ameritech.net)")
-    header = {"Api-User-Agent": user_agent}
-
-    params = build_params()
-
-    max_attempts = 5
-    for attempt in range(max_attempts):
-        # TODO argparse this
-        sleep(1)
-
-        try:
-            base_url = "https://en.wikipedia.org/w/api.php"
-            resp: r.Response = r.get(base_url,
-                                     headers=header,
-                                     params=params)
-
-            resp_json = resp.json()
-
-            if mode == "pagecats":
-                return [str(k) for k in resp_json["query"]["pages"].keys()]
-
-            if mode == "title":
-                return list(resp_json["query"]["pages"].keys())[0]
-
-            return resp_json["query"]["categorymembers"]
-        except r.exceptions.ConnectionError as conn_error:
-            err_type = type(conn_error).__name__
-            logging.warning("Caught %s, retrying page %s. (attempt %d/%d)",
-                            err_type, wiki_obj, attempt + 1, max_attempts)
-
-    logging.warning("Failed to retrieve %s.", wiki_obj)
-    return [{
-        "title": wiki_obj
-    }]
-
-
-def similarity(wiki_obj: str, subcategories: Set[str]) -> bool:
+def similarity(wiki_obj: str, subcategories: Iterable[str]) -> float:
     """
     Return the similarity of page/category to a list of subcategories.
 
@@ -99,7 +20,7 @@ def similarity(wiki_obj: str, subcategories: Set[str]) -> bool:
 
     :returns: similarity score for `wiki_obj`
     """
-    page_cats = wrapped_request(wiki_obj, "pagecats")
+    page_cats = request_page_categories(wiki_obj)
 
     matching_cats = [cat for cat in page_cats if cat in subcategories]
 
@@ -140,7 +61,7 @@ class WikiBot():
         yield str(category)
 
         if depth < self.tree_depth:
-            for subcat in wrapped_request(category, "subcat"):
+            for subcat in request_subcategories(category):
                 wiki_obj = subcat["pageid"]
 
                 if wiki_obj in visited:
@@ -154,7 +75,7 @@ class WikiBot():
                                                       depth=depth + 1,
                                                       visited=visited)
 
-    def save_array(self, category: str, subcats: Set[str]) -> None:
+    def save_array(self, category: str, subcats: Iterable[str]):
         """
         Write array to `{category}_subcats.txt`.
         TODO Add filename to argparse.
@@ -237,7 +158,7 @@ class WikiBot():
         cat = random.sample(subcats, 1)[0]
 
         logging.debug("Descending into category %s", cat)
-        pages = wrapped_request(cat, "subpage")
+        pages = request_subpages(cat)
 
         while (not random_page or not valid_random_page):
             try:
@@ -260,7 +181,7 @@ class WikiBot():
 
                 cat = random.sample(subcats, 1)[0]
                 logging.debug("Descending into category %s", cat)
-                pages = wrapped_request(cat, "subpage")
+                pages = request_subpages(cat)
 
         return random_page["title"]
 
@@ -322,7 +243,7 @@ if __name__ == "__main__":
     if args.regen:
         logging.debug("Regenerating cache...")
 
-    category_id = wrapped_request("Category:" + args.category, "title")
+    category_id = request_pageid_from_title("Category:" + args.category)
 
     random_page_title = wb.random_page(category_id,
                                        save=args.save,

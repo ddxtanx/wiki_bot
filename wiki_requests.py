@@ -105,7 +105,8 @@ def wrapped_request(params: JSON) -> JSON:
     header = {"Api-User-Agent": user_agent}
 
     max_attempts = 5
-    for attempt in range(max_attempts):
+    attempt = 0
+    while True:
         # TODO argparse this
         sleep(1)
 
@@ -113,13 +114,15 @@ def wrapped_request(params: JSON) -> JSON:
             base_url = "https://en.wikipedia.org/w/api.php"
             resp: r.Response = r.get(base_url,
                                      headers=header,
-                                     params=params)
+                                     params=params,
+                                     timeout=5)
 
             return resp.json()
-        except r.exceptions.ConnectionError as conn_error:
+        except (r.exceptions.Timeout, r.exceptions.ConnectionError) as conn_error:
             err_type = type(conn_error).__name__
-            logging.warning("Caught %s, retrying. (attempt %d/%d)",
-                            err_type, attempt + 1, max_attempts)
-
-    logging.warning("Request failed. Returning nothing.")
-    return {}
+            if attempt < max_attempts:
+                attempt += 1
+                logging.warning("Caught %s, retrying. (attempt %d/%d)",
+                                err_type, attempt, max_attempts)
+            else:
+                raise conn_error

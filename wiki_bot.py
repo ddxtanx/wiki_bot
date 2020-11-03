@@ -1,4 +1,6 @@
-"""Generate a random page from a wikipedia category."""
+"""Retrieve a random page from a given Wikipedia category, including its
+subcategories.
+"""
 import argparse
 import json
 import logging
@@ -6,7 +8,10 @@ import random
 from typing import List, Dict, Iterable, Optional
 from urllib.parse import quote
 
-from wiki_requests import (request_category_info,
+import requests as r  # pylint:disable=import-error
+
+from wiki_requests import (JSON,
+                           request_category_info,
                            request_subpages,
                            request_page_categories,
                            request_pageid_from_title)
@@ -42,13 +47,13 @@ class WikiBot():
         """
         self.tree_depth = tree_depth
         self.min_similarity = min_similarity
-        self.use_titles = False
 
     def get_subcategories(self,
                           category_id: str,
                           depth: int = 0,
-                          visited: Optional[List[str]] = None
-                          ) -> Iterable[Dict[str, int]]:
+                          visited: Optional[List[str]] = None,
+                          parent: str = None
+                          ) -> Iterable[JSON]:
         """
         Get subcategories of a given subcategory.
 
@@ -63,8 +68,10 @@ class WikiBot():
         if depth < self.tree_depth:
             category_info = request_category_info(category_id)
 
-            page_count = category_info["page_count"]
-            yield {category_id: page_count}
+            page_count: int = category_info["page_count"]
+            yield {category_id: {"page_count": page_count,
+                                 "depth": depth,
+                                 "parent": parent}}
 
             for subcat in category_info["subcats"]:
                 subcat_id = subcat["pageid"]
@@ -78,7 +85,8 @@ class WikiBot():
 
                     yield from self.get_subcategories(subcat_id,
                                                       depth=depth + 1,
-                                                      visited=visited)
+                                                      visited=visited,
+                                                      parent=category_id)
 
     def save_array(self, category: str, subcats: Iterable[str]):
         """
@@ -91,11 +99,8 @@ class WikiBot():
         filename = "{category}_subcats.json".format(category=category)
         logging.info("Writing subcategories to %s...", filename)
 
-        cache = {"depth": self.tree_depth,
-                 "subcats": subcats}
-
         with open(filename, 'w') as outfile:
-            json.dump(cache, outfile)
+            json.dump(subcats, outfile)
 
     def get_all_subcategories(self, category: str) -> Dict[str, int]:
         """
@@ -103,8 +108,13 @@ class WikiBot():
         :returns: deduplicated list of subcategories of `category`
         """
         subcats = {}
-        for subcat in self.get_subcategories(category):
-            subcats.update(subcat)
+        try:
+            for subcat in self.get_subcategories(category):
+                subcats.update(subcat)
+        except r.exceptions.ConnectionError as conn_error:
+            logging.error("Connection error. Saving...")
+            self.save_array(category, subcats)
+            raise conn_error
 
         return subcats
 
@@ -120,23 +130,22 @@ class WikiBot():
         try:
             with open(filename, 'r') as cache_file:
                 logging.info("Cache found at %s.", filename)
-                cache = json.load(cache_file)
-                subcats = cache["subcats"]
+                subcats = json.load(cache_file)
 
-                file_depth = cache["depth"]
-
-            if file_depth < self.tree_depth:
-                logging.info("Updating cache from depth %d to depth %d.",
-                             file_depth, self.tree_depth)
-
-                subcats = self.get_all_subcategories(category)
-                self.save_array(category, subcats)
-
-            return subcats
-        except IOError:
+                file_depth = 1 + max(data["depth"] for data in subcats.values())
+        except (FileNotFoundError, IOError):
             logging.info("Cache not found at %s.", filename)
             subcats = self.get_all_subcategories(category)
             return subcats
+
+        if file_depth < self.tree_depth:
+            logging.info("Updating cache from depth %d to depth %d.",
+                         file_depth, self.tree_depth)
+
+            subcats = self.get_all_subcategories(category)
+            self.save_array(category, subcats)
+
+        return subcats
 
     def random_page(self,
                     category: str,
@@ -164,7 +173,8 @@ class WikiBot():
 
         while subcats:
             subcat_names = list(subcats.keys())
-            subcat_freqs = list(subcats.values())
+
+            subcat_freqs = [data["page_count"] for data in subcats.values()]
             category = random.choices(subcat_names, weights=subcat_freqs)[0]
 
             logging.debug("Trying category %s", category)

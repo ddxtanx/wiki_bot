@@ -38,7 +38,7 @@ def similarity(wiki_obj: str, subcategories: Iterable[str]) -> float:
 class WikiBot():
     """WikiBot Class."""
 
-    def __init__(self, tree_depth: int, min_similarity: float):
+    def __init__(self, tree_depth: int = 4, min_similarity: float = 0, verbose: bool = False):
         """
         Constructor.
 
@@ -47,6 +47,14 @@ class WikiBot():
         """
         self.tree_depth = tree_depth
         self.min_similarity = min_similarity
+
+        if verbose:
+            LOG_LEVEL = logging.DEBUG
+        else:
+            LOG_LEVEL = logging.INFO
+
+        logging.basicConfig(format="%(levelname)s:%(message)s", level=LOG_LEVEL)
+
 
     def get_subcategories(self,
                           category_id: str,
@@ -244,14 +252,7 @@ if __name__ == "__main__":
                         )
     args = parser.parse_args()
 
-    wb = WikiBot(args.tree_depth, args.similarity)
-
-    if args.verbose:
-        LOG_LEVEL = logging.DEBUG
-    else:
-        LOG_LEVEL = logging.INFO
-
-    logging.basicConfig(format="%(levelname)s:%(message)s", level=LOG_LEVEL)
+    wb = WikiBot(tree_depth=args.tree_depth, min_similarity=args.similarity, verbose=args.verbose)
 
     if args.save:
         logging.debug("Caching to file...")

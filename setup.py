@@ -13,7 +13,7 @@ setup(
   url='https://github.com/ddxtanx/wiki_bot',
   license='MIT',
   download_url='https://github.com/ddxtanx/wiki_bot/archive/1.1.tar.gz',
-  py_modules["wiki_bot", "wiki_requests"],
+  py_modules=["wiki_bot", "wiki_requests"],
   keywords=['wikipedia', 'random', 'generator', 'command_line', 'api', 'mypy', 'library', 'wiki'],
   classifiers=[
       "Development Status :: 5 - Production/Stable",

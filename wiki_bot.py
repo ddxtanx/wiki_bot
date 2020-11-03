@@ -83,13 +83,14 @@ class WikiBot():
 
             for subcat in category_info["subcats"]:
                 subcat_id = subcat["pageid"]
+                subcat_name = subcat["title"]
 
                 if subcat_id in visited:
-                    logging.debug("Skipping already-visited subcategory %s",
-                                  subcat_id)
+                    logging.debug("Skipping already-visited category %s",
+                                  subcat_name)
                 else:
-                    logging.debug("(depth %d) Discovered subcategory %s of %s",
-                                  depth + 1, subcat_id, category_id)
+                    logging.debug("(depth %d) Discovered category %s",
+                                  depth + 1, subcat_name)
 
                     yield from self.get_subcategories(subcat_id,
                                                       depth=depth + 1,

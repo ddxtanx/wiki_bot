@@ -6,10 +6,10 @@ import random
 from typing import List, Dict, Iterable, Optional
 from urllib.parse import quote
 
-from .wiki_requests import (request_category_info,
-                            request_subpages,
-                            request_page_categories,
-                            request_pageid_from_title)
+from wiki_requests import (request_category_info,
+                           request_subpages,
+                           request_page_categories,
+                           request_pageid_from_title)
 
 
 def similarity(wiki_obj: str, subcategories: Iterable[str]) -> float:
